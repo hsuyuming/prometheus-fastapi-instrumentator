@@ -15,7 +15,21 @@ from typing import Callable, List, Optional, Sequence, Tuple, Union
 from prometheus_client import REGISTRY, CollectorRegistry, Counter, Histogram, Summary
 from starlette.requests import Request
 from starlette.responses import Response
+from opentelemetry import trace
 
+tracer = trace.get_tracer(__name__)
+
+def generate_exemplar():
+    span = trace.get_current_span()
+    if span != trace.INVALID_SPAN:
+        ctx = span.get_span_context()
+        if ctx != trace.INVALID_SPAN_CONTEXT:
+            exemplar_attrs = {
+                "trace_id": trace.format_trace_id(ctx.trace_id),
+                "span_id": trace.format_span_id(ctx.span_id),
+            }
+            return exemplar_attrs
+    return {}
 
 # ------------------------------------------------------------------------------
 class Info:
@@ -190,9 +204,9 @@ def latency(
                     for attribute_name in info_attribute_names
                 ]
 
-                METRIC.labels(*label_values).observe(info.modified_duration)
+                METRIC.labels(*label_values).observe(info.modified_duration, exemplar=generate_exemplar())
             else:
-                METRIC.observe(info.modified_duration)
+                METRIC.observe(info.modified_duration, exemplar=generate_exemplar())
 
         return instrumentation
     except ValueError as e:
@@ -553,9 +567,9 @@ def requests(
                     for attribute_name in info_attribute_names
                 ]
 
-                METRIC.labels(*label_values).inc()
+                METRIC.labels(*label_values).inc(exemplar=generate_exemplar())
             else:
-                METRIC.inc()
+                METRIC.inc(exemplar=generate_exemplar())
 
         return instrumentation
     except ValueError as e:
@@ -735,11 +749,11 @@ def default(
             if not should_only_respect_2xx_for_highr or info.modified_status.startswith(
                 "2"
             ):
-                LATENCY_HIGHR.observe(info.modified_duration)
+                LATENCY_HIGHR.observe(info.modified_duration, exemplar=generate_exemplar())
 
             LATENCY_LOWR.labels(
                 handler=info.modified_handler, method=info.method
-            ).observe(info.modified_duration)
+            ).observe(info.modified_duration, exemplar=generate_exemplar())
 
         return instrumentation
 

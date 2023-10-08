@@ -11,9 +11,9 @@ from prometheus_client import (
     CONTENT_TYPE_LATEST,
     REGISTRY,
     CollectorRegistry,
-    generate_latest,
     multiprocess,
 )
+from prometheus_client.exposition import choose_encoder
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -261,6 +261,7 @@ class PrometheusFastApiInstrumentator:
             """Endpoint that serves Prometheus metrics."""
 
             ephemeral_registry = self.registry
+            generate_latest, content_type = choose_encoder(request.headers.get('accept',''))
             if "PROMETHEUS_MULTIPROC_DIR" in os.environ:
                 ephemeral_registry = CollectorRegistry()
                 multiprocess.MultiProcessCollector(ephemeral_registry)
@@ -273,7 +274,7 @@ class PrometheusFastApiInstrumentator:
                 resp.headers["Content-Encoding"] = "gzip"
             else:
                 resp = Response(content=generate_latest(ephemeral_registry))
-                resp.headers["Content-Type"] = CONTENT_TYPE_LATEST
+                resp.headers["Content-Type"] = content_type
 
             return resp
 
